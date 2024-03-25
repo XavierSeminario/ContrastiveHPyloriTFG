@@ -18,9 +18,18 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from model import ResNet_Triplet
 from tqdm import tqdm
+from utils import list_imgs
+
 
 train_data_path = 'HPyloriData/annotated_windows'
 train_data = pd.read_excel('./HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
+
+llista = list_imgs()
+imatges=(train_data.iloc[:, 0].values) + "_" + (list(map(str, train_data.iloc[:, 1]))) + "." + [num.zfill(5) for num in list(map(str, train_data.iloc[:, 2]))]
+train_data = train_data[[elemento in llista for elemento in imatges]].reset_index().drop(['index'],axis=1)
+
+print(train_data)
+
 train_set, test_set = train_test_split(train_data, test_size=0.1, random_state=42)
 
 def get_train_dataset(IMAGE_SIZE=256):
@@ -42,11 +51,12 @@ IMAGE_SIZE = 28
 BATCH_SIZE = 64
 DEVICE = get_device()
 LEARNING_RATE = 0.001
-EPOCHS = 200
+EPOCHS = 20
 
 train_dataset = get_train_dataset(IMAGE_SIZE = IMAGE_SIZE)
 train_dl = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
 
+# print(train_data)
 ResNet = ResNet_Triplet()
 ResNet = ResNet.to(DEVICE)
 optimizer = torch.optim.Adam(ResNet.parameters(),lr = LEARNING_RATE)
@@ -92,7 +102,7 @@ print("DONE")
 
 embeddings = ResNet.Feature_Extractor(anchor_img)
 tsne = TSNE(n_components=2, random_state=42)
-embeddings_2d = tsne.fit_transform(embeddings.detach().numpy())
+embeddings_2d = tsne.fit_transform(embeddings.detach().cpu().numpy())
 
 plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], c=anchor_label.detach().tolist(), cmap='viridis', marker='o')
 plt.title('Visualització t-SNE dels Embedings 64-Dimensionals')

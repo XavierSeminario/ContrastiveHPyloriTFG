@@ -1,5 +1,7 @@
 from PIL import Image
 import random
+import os
+import numpy as np
 
 class TripletDataset():
     def __init__(self, df, path, train=True, transform=None):
@@ -11,6 +13,8 @@ class TripletDataset():
             self.images = (df.iloc[:, 0].values) + "_" + (list(map(str, df.iloc[:, 1]))) + "." + [num.zfill(5) for num in list(map(str, df.iloc[:, 2]))]
             self.labels = df.iloc[:, 7].values
             self.index = df.index.values 
+
+    
     def __len__(self):
         return len(self.images)
     def __getitem__(self, item):
