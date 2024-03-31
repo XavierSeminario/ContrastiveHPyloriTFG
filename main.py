@@ -27,8 +27,8 @@ train_data = pd.read_excel('./HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
 llista = list_imgs()
 imatges=(train_data.iloc[:, 0].values) + "_" + (list(map(str, train_data.iloc[:, 1]))) + "." + [num.zfill(5) for num in list(map(str, train_data.iloc[:, 2]))]
 train_data = train_data[[elemento in llista for elemento in imatges]].reset_index().drop(['index'],axis=1)
-
-print(train_data)
+train_data=train_data[train_data['Presence']!=0]
+# print(train_data)
 
 train_set, test_set = train_test_split(train_data, test_size=0.1, random_state=42)
 
@@ -51,7 +51,7 @@ IMAGE_SIZE = 28
 BATCH_SIZE = 64
 DEVICE = get_device()
 LEARNING_RATE = 0.001
-EPOCHS = 20
+EPOCHS = 21
 
 train_dataset = get_train_dataset(IMAGE_SIZE = IMAGE_SIZE)
 train_dl = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
@@ -63,6 +63,7 @@ optimizer = torch.optim.Adam(ResNet.parameters(),lr = LEARNING_RATE)
 criterion = TripletLoss()
 losses_train = []
 losses_val =  []
+
 
 for epoch in tqdm(range(EPOCHS), desc='Epochs'):
     ResNet.train()
@@ -100,8 +101,9 @@ embeddings = ResNet.Feature_Extractor(anchor_img)
 
 print("DONE")
 
+# print(anchor_img.shape)
 embeddings = ResNet.Feature_Extractor(anchor_img)
-tsne = TSNE(n_components=2, random_state=42)
+tsne = TSNE(n_components=2, random_state=42, perplexity=20)
 embeddings_2d = tsne.fit_transform(embeddings.detach().cpu().numpy())
 
 plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], c=anchor_label.detach().tolist(), cmap='viridis', marker='o')
