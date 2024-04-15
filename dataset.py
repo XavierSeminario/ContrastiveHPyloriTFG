@@ -10,8 +10,8 @@ class TripletDataset():
         self.transform = transform
         self.path = path
         if self.is_train:
-            self.images = (df.iloc[:, 0].values) + "_" + (list(map(str, df.iloc[:, 1]))) + "." + [num.zfill(5) for num in list(map(str, df.iloc[:, 2]))]
-            self.labels = df.iloc[:, 7].values
+            self.images = (df.iloc[:, 1].values) + "_" + (list(map(str, df.iloc[:, 2]))) + "." + [num.zfill(5) for num in list(map(str, df.iloc[:, 3]))]
+            self.labels = df.iloc[:, 8].values
             self.index = df.index.values 
 
     
