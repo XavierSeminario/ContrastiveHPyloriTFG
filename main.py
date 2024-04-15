@@ -12,7 +12,7 @@ from torchvision.transforms import transforms
 from sklearn.model_selection import train_test_split
 from dataset import TripletDataset
 import random
-from triplet_loss import TripletLoss
+from triplet_loss import TripletLoss, ExponentialLoss
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
@@ -21,6 +21,8 @@ from tqdm import tqdm
 
 train_data_path = 'HPyloriData/annotated_windows'
 train_data = pd.read_excel('./HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
+train_data = train_data[train_data['Deleted']==0][train_data['Cropped']==0][train_data['Presence']!=0].reset_index()
+print(train_data)
 train_set, test_set = train_test_split(train_data, test_size=0.1, random_state=42)
 
 def get_train_dataset(IMAGE_SIZE=256):
@@ -41,8 +43,8 @@ def get_device():
 IMAGE_SIZE = 28
 BATCH_SIZE = 64
 DEVICE = get_device()
-LEARNING_RATE = 0.001
-EPOCHS = 200
+LEARNING_RATE = 0.0001
+EPOCHS = 20
 
 train_dataset = get_train_dataset(IMAGE_SIZE = IMAGE_SIZE)
 train_dl = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
@@ -50,7 +52,7 @@ train_dl = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
 ResNet = ResNet_Triplet()
 ResNet = ResNet.to(DEVICE)
 optimizer = torch.optim.Adam(ResNet.parameters(),lr = LEARNING_RATE)
-criterion = TripletLoss()
+criterion = ExponentialLoss()
 losses_train = []
 losses_val =  []
 
