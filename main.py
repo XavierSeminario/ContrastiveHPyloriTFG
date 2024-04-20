@@ -18,7 +18,7 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from model import ResNet_Triplet
 from tqdm import tqdm
-from utils import list_imgs
+from utils import *
 
 
 train_data_path = 'HPyloriData/annotated_windows'
@@ -46,7 +46,7 @@ IMAGE_SIZE = 28
 BATCH_SIZE = 64
 TEST_B_SIZE = 512
 DEVICE = get_device()
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 EPOCHS = 50
 
 train_dataset = get_train_dataset(IMAGE_SIZE = IMAGE_SIZE)
@@ -57,7 +57,7 @@ test_dl = DataLoader(train_dataset,batch_size=TEST_B_SIZE,shuffle=True)
 ResNet = ResNet_Triplet()
 ResNet = ResNet.to(DEVICE)
 optimizer = torch.optim.Adam(ResNet.parameters(),lr = LEARNING_RATE)
-criterion = TripletLoss(2)
+criterion = ExponentialLoss()
 losses_train = []
 losses_val =  []
 
@@ -71,9 +71,9 @@ for epoch in tqdm(range(EPOCHS), desc='Epochs'):
             test_positive_img = positive_img
             test_negative_img = negative_img
             continue
-        anchor_img = anchor_img.to(DEVICE)
-        positive_img = positive_img.to(DEVICE)
-        negative_img = negative_img.to(DEVICE)
+        anchor_img = rotate_some(anchor_img).to(DEVICE)
+        positive_img = rotate_some(positive_img).to(DEVICE)
+        negative_img = rotate_some(negative_img).to(DEVICE)
         optimizer.zero_grad()
         anchor_out = ResNet(anchor_img)
         positive_out = ResNet(positive_img)

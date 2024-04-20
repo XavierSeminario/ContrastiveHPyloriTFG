@@ -1,4 +1,6 @@
 import os
+import torchvision
+import random
 
 
 
@@ -19,3 +21,12 @@ def list_imgs(direc='./HPyloriData/annotated_windows'):
                     if file.endswith('.png'):
                         imatges_cropped.append((carp+"."+file).rstrip('.png'))
         return imatges_cropped
+
+
+def rotate_some(imgs):
+    angles = 90,180,270
+    size, _, __, ___ = imgs.shape
+    for i in range(size//2):
+        num = random.randint(0,size-1)
+        imgs[num] = torchvision.transforms.functional.rotate(imgs[num], angle=random.choice(angles))
+    return imgs
