@@ -44,18 +44,20 @@ def get_device():
 
 IMAGE_SIZE = 28
 BATCH_SIZE = 64
+TEST_B_SIZE = 512
 DEVICE = get_device()
-LEARNING_RATE = 0.0001
-EPOCHS = 20
+LEARNING_RATE = 0.001
+EPOCHS = 50
 
 train_dataset = get_train_dataset(IMAGE_SIZE = IMAGE_SIZE)
 train_dl = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
+test_dl = DataLoader(train_dataset,batch_size=TEST_B_SIZE,shuffle=True)
 
 # print(train_data)
 ResNet = ResNet_Triplet()
 ResNet = ResNet.to(DEVICE)
 optimizer = torch.optim.Adam(ResNet.parameters(),lr = LEARNING_RATE)
-criterion = ExponentialLoss()
+criterion = TripletLoss(2)
 losses_train = []
 losses_val =  []
 
@@ -97,6 +99,10 @@ embeddings = ResNet.Feature_Extractor(anchor_img)
 print("DONE")
 
 # print(anchor_img.shape)
+for step, (anchor_img, positive_img, negative_img, anchor_label) in enumerate(tqdm(test_dl, desc='Testing', leave=False)):
+        if step == 2:
+            anchor_img = anchor_img.to(DEVICE)
+            break
 embeddings = ResNet.Feature_Extractor(anchor_img)
 tsne = TSNE(n_components=2, random_state=42, perplexity=20)
 embeddings_2d = tsne.fit_transform(embeddings.detach().cpu().numpy())
