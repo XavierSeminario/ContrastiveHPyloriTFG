@@ -46,8 +46,8 @@ IMAGE_SIZE = 28
 BATCH_SIZE = 64
 TEST_B_SIZE = 512
 DEVICE = get_device()
-LEARNING_RATE = 0.0001
-EPOCHS = 50
+LEARNING_RATE = 0.001
+EPOCHS = 100
 
 train_dataset = get_train_dataset(IMAGE_SIZE = IMAGE_SIZE)
 train_dl = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
@@ -57,7 +57,7 @@ test_dl = DataLoader(train_dataset,batch_size=TEST_B_SIZE,shuffle=True)
 ResNet = ResNet_Triplet()
 ResNet = ResNet.to(DEVICE)
 optimizer = torch.optim.Adam(ResNet.parameters(),lr = LEARNING_RATE)
-criterion = ExponentialLoss()
+criterion = TripletLoss(2)
 losses_train = []
 losses_val =  []
 
@@ -71,9 +71,9 @@ for epoch in tqdm(range(EPOCHS), desc='Epochs'):
             test_positive_img = positive_img
             test_negative_img = negative_img
             continue
-        anchor_img = rotate_some(anchor_img).to(DEVICE)
-        positive_img = rotate_some(positive_img).to(DEVICE)
-        negative_img = rotate_some(negative_img).to(DEVICE)
+        anchor_img = rotate_some(anchor_img,p=1).to(DEVICE)
+        positive_img = rotate_some(positive_img,p=1).to(DEVICE)
+        negative_img = rotate_some(negative_img,p=1).to(DEVICE)
         optimizer.zero_grad()
         anchor_out = ResNet(anchor_img)
         positive_out = ResNet(positive_img)
