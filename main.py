@@ -52,7 +52,7 @@ train_dl = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
 ResNet = ResNet_Triplet()
 ResNet = ResNet.to(DEVICE)
 optimizer = torch.optim.Adam(ResNet.parameters(),lr = LEARNING_RATE)
-criterion = ExponentialLoss()
+criterion = ExponentialLoss(-0.5)
 losses_train = []
 losses_val =  []
 

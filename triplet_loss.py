@@ -24,5 +24,13 @@ class ExponentialLoss(nn.Module):
         distance_positive = self.calc_euclidean(anchor, positive)
         distance_negative = self.calc_euclidean(anchor, negative)
         # losses = torch.relu(distance_positive - distance_negative + self.margin)
-        losses = torch.exp(distance_positive-distance_negative)
+        losses = torch.exp(distance_positive-distance_negative + self.margin)
         return losses.mean()
+    
+class ContrastiveLoss(nn.Module):
+    def __init__(self):
+        super(ContrastiveLoss, self).__init__()
+    def calc_Dw(self):
+        return None
+    def forwars(self, anchor: torch.Tensor, positive: torch.Tensor, negative: torch.Tensor) -> torch.Tensor:
+        return None
