@@ -18,6 +18,8 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from model import ResNet_Triplet
 from tqdm import tqdm
+from utils import *
+
 
 train_data_path = 'HPyloriData/annotated_windows'
 train_data = pd.read_excel('./HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
@@ -42,19 +44,23 @@ def get_device():
 
 IMAGE_SIZE = 28
 BATCH_SIZE = 64
+TEST_B_SIZE = 512
 DEVICE = get_device()
-LEARNING_RATE = 0.0001
-EPOCHS = 20
+LEARNING_RATE = 0.001
+EPOCHS = 100
 
 train_dataset = get_train_dataset(IMAGE_SIZE = IMAGE_SIZE)
 train_dl = DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
+test_dl = DataLoader(train_dataset,batch_size=TEST_B_SIZE,shuffle=True)
 
+# print(train_data)
 ResNet = ResNet_Triplet()
 ResNet = ResNet.to(DEVICE)
 optimizer = torch.optim.Adam(ResNet.parameters(),lr = LEARNING_RATE)
-criterion = ExponentialLoss(-0.5)
+criterion = TripletLoss(2)
 losses_train = []
 losses_val =  []
+
 
 for epoch in tqdm(range(EPOCHS), desc='Epochs'):
     ResNet.train()
@@ -65,9 +71,9 @@ for epoch in tqdm(range(EPOCHS), desc='Epochs'):
             test_positive_img = positive_img
             test_negative_img = negative_img
             continue
-        anchor_img = anchor_img.to(DEVICE)
-        positive_img = positive_img.to(DEVICE)
-        negative_img = negative_img.to(DEVICE)
+        anchor_img = rotate_some(anchor_img,p=1).to(DEVICE)
+        positive_img = rotate_some(positive_img,p=1).to(DEVICE)
+        negative_img = rotate_some(negative_img,p=1).to(DEVICE)
         optimizer.zero_grad()
         anchor_out = ResNet(anchor_img)
         positive_out = ResNet(positive_img)
@@ -92,9 +98,14 @@ embeddings = ResNet.Feature_Extractor(anchor_img)
 
 print("DONE")
 
+# print(anchor_img.shape)
+for step, (anchor_img, positive_img, negative_img, anchor_label) in enumerate(tqdm(test_dl, desc='Testing', leave=False)):
+        if step == 2:
+            anchor_img = anchor_img.to(DEVICE)
+            break
 embeddings = ResNet.Feature_Extractor(anchor_img)
-tsne = TSNE(n_components=2, random_state=42)
-embeddings_2d = tsne.fit_transform(embeddings.detach().numpy())
+tsne = TSNE(n_components=2, random_state=42, perplexity=20)
+embeddings_2d = tsne.fit_transform(embeddings.detach().cpu().numpy())
 
 plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], c=anchor_label.detach().tolist(), cmap='viridis', marker='o')
 plt.title('Visualització t-SNE dels Embedings 64-Dimensionals')
