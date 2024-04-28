@@ -24,7 +24,7 @@ class ExponentialLoss(nn.Module):
         distance_positive = self.calc_euclidean(anchor, positive)
         distance_negative = self.calc_euclidean(anchor, negative)
         # losses = torch.relu(distance_positive - distance_negative + self.margin)
-        losses = torch.exp(distance_positive-distance_negative)
+        losses = torch.exp(distance_positive-distance_negative + self.margin)
         return losses.mean()
     
 
