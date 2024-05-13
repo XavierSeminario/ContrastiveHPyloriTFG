@@ -1,110 +1,179 @@
-import logging
+import torch
+from models.resnet_simclr import ResNetSimCLR
+from torch.utils.tensorboard import SummaryWriter
+import torch.nn.functional as F
+from loss.nt_xent import NTXentLoss
+from loss.nt_logistic import NTLogisticLoss
+from loss.marginal_tripletC import MarginalTripletLossC
 import os
+import shutil
 import sys
 
-import torch
-import torch.nn.functional as F
-from torch.cuda.amp import GradScaler, autocast
-from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
-from utils import save_config_file, accuracy, save_checkpoint
+apex_support = False
+try:
+    sys.path.append('./apex')
+    from apex import amp
+
+    apex_support = True
+except:
+    print("Please install apex for mixed precision training from: https://github.com/NVIDIA/apex")
+    apex_support = False
+
+import numpy as np
 
 torch.manual_seed(0)
 
 
+def _save_config_file(model_checkpoints_folder):
+    if not os.path.exists(model_checkpoints_folder):
+        os.makedirs(model_checkpoints_folder)
+        shutil.copy('./config.yaml', os.path.join(model_checkpoints_folder, 'config.yaml'))
+
+
 class SimCLR(object):
 
-    def __init__(self, *args, **kwargs):
-        self.args = kwargs['args']
-        self.model = kwargs['model'].to(self.args.device)
-        self.optimizer = kwargs['optimizer']
-        self.scheduler = kwargs['scheduler']
+    def __init__(self, dataset, config):
+        self.config = config
+        self.device = self._get_device()
         self.writer = SummaryWriter()
-        logging.basicConfig(filename=os.path.join(self.writer.log_dir, 'training.log'), level=logging.DEBUG)
-        self.criterion = torch.nn.CrossEntropyLoss().to(self.args.device)
+        self.dataset = dataset
+        self.model = ResNetSimCLR(**self.config["model"]).to(self.device)
+        self.criterion = self._make_loss()
+    def _make_loss(self):
+        if (self.config['loss_type']=='nt_logistic'):
+            return NTLogisticLoss(self.device,self.config['batch_size'], **self.config['loss'])
+        elif (self.config['loss_type']=='nt_xent'):
+            return NTXentLoss(self.device,self.config['batch_size'], **self.config['loss'])
+        elif (self.config['loss_type']=='marginal_triplet'):
+            return MarginalTripletLossC(self.device,self.config['batch_size'], **self.config['loss'])
 
-    def info_nce_loss(self, features):
+    def _get_device(self):
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print("Running on:", device)
+        return device
 
-        labels = torch.cat([torch.arange(self.args.batch_size) for i in range(self.args.n_views)], dim=0)
-        labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
-        labels = labels.to(self.args.device)
+    def _step(self, model, xis, xjs, nis, njs, n_iter, labels):
 
-        features = F.normalize(features, dim=1)
+        # get the representations and the projections
+        ris, zis = model(xis)  # [N,C]
 
-        similarity_matrix = torch.matmul(features, features.T)
-        # assert similarity_matrix.shape == (
-        #     self.args.n_views * self.args.batch_size, self.args.n_views * self.args.batch_size)
-        # assert similarity_matrix.shape == labels.shape
+        # get the representations and the projections
+        rjs, zjs = model(xjs)  # [N,C]
 
-        # discard the main diagonal from both: labels and similarities matrix
-        mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.args.device)
-        labels = labels[~mask].view(labels.shape[0], -1)
-        similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
-        # assert similarity_matrix.shape == labels.shape
+        kis, yis = model(nis)  # [N,C]
 
-        # select and combine multiple positives
-        positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
+        # get the representations and the projections
+        kjs, yjs = model(njs)  # [N,C]
+        
 
-        # select only the negatives the negatives
-        negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
+        # normalize projection feature vectors
+        zis = F.normalize(zis, dim=1)
+        zjs = F.normalize(zjs, dim=1)
 
-        logits = torch.cat([positives, negatives], dim=1)
-        labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.args.device)
+        yis = F.normalize(yis, dim=1)
+        yjs = F.normalize(yjs, dim=1)
 
-        logits = logits / self.args.temperature
-        return logits, labels
+        loss = self.criterion(zis, zjs, yis, yjs, labels)
+        return loss
 
-    def train(self, train_loader):
+    def train(self):
 
-        scaler = GradScaler(enabled=self.args.fp16_precision)
+        train_loader, valid_loader = self.dataset.get_data_loaders()
+
+        model = self.model
+        model = self._load_pre_trained_weights(model)
+
+        optimizer = torch.optim.Adam(model.parameters(), 0.01, weight_decay=eval(self.config['weight_decay']))
+
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=0,
+                                                               last_epoch=-1)
+
+        if apex_support and self.config['fp16_precision']:
+            model, optimizer = amp.initialize(model, optimizer,
+                                              opt_level='O2',
+                                              keep_batchnorm_fp32=True)
+
+        model_checkpoints_folder = os.path.join(self.writer.log_dir, 'checkpoints_test')
 
         # save config file
-        save_config_file(self.writer.log_dir, self.args)
+        _save_config_file(model_checkpoints_folder)
 
         n_iter = 0
-        logging.info(f"Start SimCLR training for {self.args.epochs} epochs.")
-        logging.info(f"Training with gpu: {self.args.disable_cuda}.")
+        valid_n_iter = 0
+        best_valid_loss = np.inf
 
-        for epoch_counter in range(self.args.epochs):
-            for images, _ in tqdm(train_loader):
-                # print(images.shape)
-                images = torch.cat(images, dim=0)
+        for epoch_counter in range(self.config['epochs']):
+            print(epoch_counter)
+            for (xis, xjs, nis, njs), labels in train_loader:
+                # print(xis.shape)
+                optimizer.zero_grad()
 
-                images = images.to(self.args.device)
+                xis = xis.to(self.device)
+                xjs = xjs.to(self.device)
+                nis = nis.to(self.device)
+                njs = njs.to(self.device)
+                labels = labels.to(self.device)
+                loss = self._step(model, xis, xjs, nis, njs, n_iter,labels)
 
-                with autocast(enabled=self.args.fp16_precision):
-                    features = self.model(images)
-                    logits, labels = self.info_nce_loss(features)
-                    loss = self.criterion(logits, labels)
+                if n_iter % self.config['log_every_n_steps'] == 0:
+                    self.writer.add_scalar('train_loss', loss, global_step=n_iter)
 
-                self.optimizer.zero_grad()
+                if apex_support and self.config['fp16_precision']:
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    loss.backward()
 
-                scaler.scale(loss).backward()
-
-                scaler.step(self.optimizer)
-                scaler.update()
-
-                if n_iter % self.args.log_every_n_steps == 0:
-                    top1, top5 = accuracy(logits, labels, topk=(1, 5))
-                    self.writer.add_scalar('loss', loss, global_step=n_iter)
-                    self.writer.add_scalar('acc/top1', top1[0], global_step=n_iter)
-                    self.writer.add_scalar('acc/top5', top5[0], global_step=n_iter)
-                    self.writer.add_scalar('learning_rate', self.scheduler.get_lr()[0], global_step=n_iter)
-
+                optimizer.step()
                 n_iter += 1
+
+            # validate the model if requested
+            if epoch_counter % self.config['eval_every_n_epochs'] == 0:
+                valid_loss = self._validate(model, valid_loader)
+                if valid_loss < best_valid_loss:
+                    # save the model weights
+                    print(valid_loss)
+                    best_valid_loss = valid_loss
+                    torch.save(model.state_dict(), os.path.join(model_checkpoints_folder, 'model.pth'))
+                    # print('hola')
+                self.writer.add_scalar('validation_loss', valid_loss, global_step=valid_n_iter)
+                valid_n_iter += 1
 
             # warmup for the first 10 epochs
             if epoch_counter >= 10:
-                self.scheduler.step()
-            logging.debug(f"Epoch: {epoch_counter}\tLoss: {loss}\tTop1 accuracy: {top1[0]}")
+                scheduler.step()
+            self.writer.add_scalar('cosine_lr_decay', scheduler.get_lr()[0], global_step=n_iter)
 
-        logging.info("Training has finished.")
-        # save model checkpoints
-        checkpoint_name = 'checkpoint_{:04d}.pth.tar'.format(self.args.epochs)
-        save_checkpoint({
-            'epoch': self.args.epochs,
-            'arch': self.args.arch,
-            'state_dict': self.model.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-        }, is_best=False, filename=os.path.join(self.writer.log_dir, checkpoint_name))
-        logging.info(f"Model checkpoint and metadata has been saved at {self.writer.log_dir}.")
+    def _load_pre_trained_weights(self, model):
+        try:
+            checkpoints_folder = os.path.join('./runs', self.config['fine_tune_from'], 'checkpoints')
+            state_dict = torch.load(os.path.join(checkpoints_folder, 'model.pth'))
+            model.load_state_dict(state_dict)
+            print("Loaded pre-trained model with success.")
+        except FileNotFoundError:
+            print("Pre-trained weights not found. Training from scratch.")
+
+        return model
+
+    def _validate(self, model, valid_loader):
+
+        # validation steps
+        with torch.no_grad():
+            model.eval()
+
+            valid_loss = 0.0
+            counter = 0
+            for (xis, xjs,nis,njs), labels in valid_loader:
+                xis = xis.to(self.device)
+                xjs = xjs.to(self.device)
+
+                nis = nis.to(self.device)
+                njs = njs.to(self.device)
+                labels = labels.to(self.device)
+
+                loss = self._step(model, xis, xjs, nis, njs, counter,labels)
+                valid_loss += loss.item()
+                counter += 1
+            valid_loss /= counter
+        model.train()
+        return valid_loss

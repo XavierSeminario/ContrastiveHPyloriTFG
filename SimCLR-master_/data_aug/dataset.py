@@ -2,7 +2,6 @@ from PIL import Image
 import random
 import os
 import numpy as np
-import torchvision
 
 class HPDataset():
     def __init__(self, df, path, train=True, transform=None):
@@ -25,12 +24,12 @@ class HPDataset():
         anchor_img = Image.open(anchor_image_path).convert('RGB')
         if self.is_train:
             anchor_label = self.labels[item]
-            # positive_list = self.index[self.index!=item][self.labels[self.index!=item]==anchor_label]
+            positive_list = self.index[self.index!=item][self.labels[self.index!=item]==anchor_label]
 
-            # positive_item = random.choice(positive_list)
-            # positive_image_folder, positive_image_name = self.images[positive_item].split('.')
-            # positive_image_path = self.path + '/' + positive_image_folder + '/' + positive_image_name + '.png'
-            # positive_img = Image.open(positive_image_path).convert('RGB')
+            positive_item = random.choice(positive_list)
+            positive_image_folder, positive_image_name = self.images[positive_item].split('.')
+            positive_image_path = self.path + '/' + positive_image_folder + '/' + positive_image_name + '.png'
+            positive_img = Image.open(positive_image_path).convert('RGB')
             # positive_img = self.images[positive_item].reshape(28, 28, 1)
             # negative_list = self.index[self.index!=item][self.labels[self.index!=item]!=anchor_label]
             # negative_item = random.choice(negative_list)
@@ -42,6 +41,4 @@ class HPDataset():
                  anchor_img = self.transform(anchor_img)
                  positive_img = self.transform(positive_img)                   
             #     negative_img = self.transform(negative_img)
-        angles = [90,180,270]
-        positive_img=torchvision.transforms.functional.rotate(anchor_img, angle=random.choice(angles))
-        return (anchor_img,positive_img), (anchor_label)
+        return (anchor_img,positive_img), (anchor_label + 1)

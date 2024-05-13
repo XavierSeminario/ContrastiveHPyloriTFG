@@ -32,16 +32,25 @@ class HPDataset():
             # positive_image_path = self.path + '/' + positive_image_folder + '/' + positive_image_name + '.png'
             # positive_img = Image.open(positive_image_path).convert('RGB')
             # positive_img = self.images[positive_item].reshape(28, 28, 1)
-            # negative_list = self.index[self.index!=item][self.labels[self.index!=item]!=anchor_label]
-            # negative_item = random.choice(negative_list)
-            # negative_negative_folder, negative_image_name = self.images[negative_item].split('.')
-            # negative_image_path = self.path + '/' + negative_negative_folder + '/' + negative_image_name + '.png'
-            # negative_img = Image.open(negative_image_path).convert('RGB')
-            # #negative_img = self.images[negative_item].reshape(28, 28, 1)
+            negative_list = self.index[self.index!=item][self.labels[self.index!=item]!=anchor_label]
+            negative_item = random.choice(negative_list)
+            negative_negative_folder, negative_image_name = self.images[negative_item].split('.')
+            negative_image_path = self.path + '/' + negative_negative_folder + '/' + negative_image_name + '.png'
+            negative_img = Image.open(negative_image_path).convert('RGB')
+            #negative_img = self.images[negative_item].reshape(28, 28, 1)
             if self.transform!=None:
                  anchor_img = self.transform(anchor_img)
-                 positive_img = self.transform(positive_img)                   
-            #     negative_img = self.transform(negative_img)
+                #  positive_img = self.transform(positive_img)                   
+                 negative_img = self.transform(negative_img)
         angles = [90,180,270]
         positive_img=torchvision.transforms.functional.rotate(anchor_img, angle=random.choice(angles))
-        return (anchor_img,positive_img), (anchor_label)
+        neg2 = torchvision.transforms.functional.rotate(negative_img, angle=random.choice(angles))
+        label = (anchor_label + 1)/2
+        if label == 1:
+            anchor_img=negative_img
+            negative_img=positive_img
+            positive_img=neg2
+            label=0
+            neg2 = torchvision.transforms.functional.rotate(negative_img, angle=random.choice(angles))
+
+        return (anchor_img, positive_img, negative_img, neg2), label
