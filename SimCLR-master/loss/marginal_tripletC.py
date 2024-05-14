@@ -63,14 +63,14 @@ class MarginalTripletLossC(torch.nn.Module):
         # print(r_pos.shape)
         # positives = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1)
 
-        positives_1 = self.similarity_function(zis,zjs)
+        positives_1 = torch.diag(self.similarity_function(zis,zjs))
         # print(positives_1.shape)
-        positives_2 = self.similarity_function(nis,njs)
+        positives_2 = torch.diag(self.similarity_function(nis,njs))
         negatives_1 = self.similarity_function(zis,nis)
         negatives_2 = self.similarity_function(nis,zis)
 
-        positives = torch.cat([positives_1, positives_2], dim = 0)
-        negatives = torch.cat([negatives_1, negatives_2], dim = 0)
+        positives = torch.cat([positives_1, positives_2]).view(2*self.batch_size, 1) 
+        negatives = torch.cat([negatives_1, negatives_2]).view(2*self.batch_size, -1)
         # print(positives.shape)
         # print(positives.shape)
         # negatives = torch.cat([l_neg, r_neg]).view(2 * self.batch_size, 1) 

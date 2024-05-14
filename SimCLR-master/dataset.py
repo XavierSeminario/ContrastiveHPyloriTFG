@@ -3,6 +3,7 @@ import random
 import os
 import numpy as np
 import torchvision
+import copy
 
 class HPDataset():
     def __init__(self, df, path, train=True, transform=None):
@@ -47,10 +48,10 @@ class HPDataset():
         neg2 = torchvision.transforms.functional.rotate(negative_img, angle=random.choice(angles))
         label = (anchor_label + 1)/2
         if label == 1:
-            anchor_img=negative_img
-            negative_img=positive_img
-            positive_img=neg2
+            anchor_img=copy.deepcopy(negative_img)
+            negative_img=copy.deepcopy(positive_img)
+            positive_img=copy.deepcopy(neg2)
             label=0
-            neg2 = torchvision.transforms.functional.rotate(negative_img, angle=random.choice(angles))
+            neg2 = torchvision.transforms.functional.rotate(copy.deepcopy(negative_img), angle=random.choice(angles))
 
         return (anchor_img, positive_img, negative_img, neg2), label

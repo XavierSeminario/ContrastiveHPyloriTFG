@@ -63,13 +63,13 @@ class NTXentLoss(torch.nn.Module):
         # positives = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1) 
         # negatives = torch.cat([l_neg, r_neg]).view(2 * self.batch_size, 1) 
 
-        positives_1 = self.similarity_function(zis,zjs)
+        positives_1 = torch.diag(self.similarity_function(zis,zjs))
         # print(positives_1.shape)
-        positives_2 = self.similarity_function(nis,njs)
+        positives_2 = torch.diag(self.similarity_function(nis,njs))
         negatives_1 = self.similarity_function(zis,nis)
         negatives_2 = self.similarity_function(nis,zis)
 
-        positives = torch.cat([positives_1, positives_2]).view(2*self.batch_size, -1) 
+        positives = torch.cat([positives_1, positives_2]).view(2*self.batch_size, 1) 
         negatives = torch.cat([negatives_1, negatives_2]).view(2*self.batch_size, -1)
 
         logits = torch.cat((positives, negatives), dim=1)
@@ -77,8 +77,8 @@ class NTXentLoss(torch.nn.Module):
         # print(logits)
         # print(label.view(-1,1))
         # print(label)
-        labels = torch.zeros(2*self.batch_size,2*self.batch_size).to(self.device)
-        labels[:,:self.batch_size]=1
+        labels = torch.zeros(self.batch_size +1,2*self.batch_size).to(self.device)
+        labels[:,0]=1
         # labels = labels.to(device)
         # print(labels)
         # print(logits)
