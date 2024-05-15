@@ -59,8 +59,10 @@ class DataSetWrapper(object):
             valid_loader = train_dataset[np.isin(X, X_test)].reset_index().drop('level_0',axis=1)
 
         train_data_path = '../HPyloriData/annotated_windows'
-        train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32))]))
-        valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32))]))
+        train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+                                                                                                        transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
+        valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+                                                                                                        transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
 
         train_dl = DataLoader(train_set,batch_size=self.batch_size,shuffle=True,drop_last=True)
         test_dl = DataLoader(valid_set,batch_size=self.batch_size,shuffle=True,drop_last=True)
