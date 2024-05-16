@@ -33,17 +33,17 @@ class DataSetWrapper(object):
         train_loader, valid_loader = self.get_train_validation_data_loaders(train_dataset)
         return train_loader, valid_loader
 
-    def _get_simclr_pipeline_transform(self):
-        # get a set of data augmentation transformations as described in the SimCLR paper.
-        color_jitter = transforms.ColorJitter(0.4 * self.s, 0.4 * self.s, 0.4 * self.s, 0.1 * self.s)
-        data_transforms = transforms.Compose([transforms.RandomResizedCrop(size=self.input_shape[0]),
-                                              transforms.RandomHorizontalFlip(),
-                                              transforms.RandomApply([color_jitter], p=0.8),
-                                              transforms.RandomGrayscale(p=0.2),
-                                              #GaussianBlur(kernel_size=int(0.1 * self.input_shape[0])),
-                                              transforms.ToTensor(),
-                                              transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
-        return data_transforms
+    # def _get_simclr_pipeline_transform(self):
+    #     # get a set of data augmentation transformations as described in the SimCLR paper.
+    #     color_jitter = transforms.ColorJitter(0.4 * self.s, 0.4 * self.s, 0.4 * self.s, 0.1 * self.s)
+    #     data_transforms = transforms.Compose([transforms.RandomResizedCrop(size=self.input_shape[0]),
+    #                                           transforms.RandomHorizontalFlip(),
+    #                                           transforms.RandomApply([color_jitter], p=0.8),
+    #                                           transforms.RandomGrayscale(p=0.2),
+    #                                           #GaussianBlur(kernel_size=int(0.1 * self.input_shape[0])),
+    #                                           transforms.ToTensor(),
+    #                                           transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
+    #     return data_transforms
 
     def get_train_validation_data_loaders(self, train_dataset):
         # obtain training indices that will be used for validation
@@ -59,6 +59,7 @@ class DataSetWrapper(object):
             valid_loader = train_dataset[np.isin(X, X_test)].reset_index().drop('level_0',axis=1)
 
         train_data_path = '../HPyloriData/annotated_windows'
+        color_jitter = transforms.ColorJitter(0 * self.s, 0.2 * self.s, 0.2 * self.s, 0 * self.s)
         train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
                                                                                                         transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
         valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),

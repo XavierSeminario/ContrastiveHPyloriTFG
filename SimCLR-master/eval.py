@@ -37,7 +37,7 @@ def eval(model,data_root,device,config):
     y_train = np.array(y_train)
     y_test = []
     i=0
-    for (batch_x, _, batch_x_neg, _), batch_y in train_loader:
+    for (batch_x, _, batch_x_neg, _), batch_y in test_loader:
         i+=1
         if i%2 == 0:
             batch_x = batch_x_neg
@@ -72,8 +72,10 @@ def load_dataset(root ,config):
         valid_loader = train_dataset[np.isin(X, X_test)].reset_index().drop('level_0',axis=1)
 
     train_data_path = '../HPyloriData/annotated_windows'
-    train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32))]))
-    valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32))]))
+    train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+                                                                                                        transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
+    valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+                                                                                                        transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
 
     train_dl = DataLoader(train_set,batch_size=config['batch_size'],shuffle=True,drop_last=True)
     test_dl = DataLoader(valid_set,batch_size=config['batch_size'],shuffle=True,drop_last=True)
@@ -95,14 +97,14 @@ def linear_model_eval(X_train, y_train, X_test, y_test):
     print("Logistic Regression feature eval")
     print("Train score:", clf.score(X_train, y_train))
     print("Test score:", clf.score(X_test, y_test))
-    '''
+ 
     print("-------------------------------")
     neigh = KNeighborsClassifier(n_neighbors=10)
     neigh.fit(X_train, y_train)
     print("KNN feature eval")
     print("Train score:", neigh.score(X_train, y_train))
     print("Test score:", neigh.score(X_test, y_test))
-    '''
+
 if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print("Using device:", device)

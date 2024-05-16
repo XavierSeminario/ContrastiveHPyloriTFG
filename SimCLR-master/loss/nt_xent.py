@@ -77,8 +77,7 @@ class NTXentLoss(torch.nn.Module):
         # print(logits)
         # print(label.view(-1,1))
         # print(label)
-        labels = torch.zeros(self.batch_size +1,2*self.batch_size).to(self.device)
-        labels[:,0]=1
+        labels = torch.zeros(2*self.batch_size).to(self.device).long()
         # labels = labels.to(device)
         # print(labels)
         # print(logits)

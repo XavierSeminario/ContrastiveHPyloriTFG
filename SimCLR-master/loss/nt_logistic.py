@@ -39,20 +39,29 @@ class NTLogisticLoss(torch.nn.Module):
         # v shape: (N, 2N)
         v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))
         return v
-    def forward(self,zis,zjs):
+    def forward(self,zis,zjs,nis,njs,labels=None):
         representations = torch.cat([zjs, zis], dim=0)
 
         similarity_matrix = self.similarity_function(representations, representations)
 
         # filter out the scores from the positive samples
-        l_pos = torch.diag(similarity_matrix, self.batch_size)
-        r_pos = torch.diag(similarity_matrix, -self.batch_size)
-        positives = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1)
-        negatives = similarity_matrix[self.mask_samples_from_same_repr].view(2 * self.batch_size, -1)*-1
-        positives /= self.temperature
-        positives= torch.log(self.activation(positives))
-        negatives/= self.temperature
-        negatives = torch.log(self.activation(negatives))
+        # l_pos = torch.diag(similarity_matrix, self.batch_size)
+        # r_pos = torch.diag(similarity_matrix, -self.batch_size)
+        # positives = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1)
+        # negatives = similarity_matrix[self.mask_samples_from_same_repr].view(2 * self.batch_size, -1)*-1
+        # positives /= self.temperature
+        # positives= torch.log(self.activation(positives))
+        # negatives/= self.temperature
+        # negatives = torch.log(self.activation(negatives))
+        # logits = positives +negatives
+        positives_1 = self.similarity_function(zis,zjs)
+        # print(positives_1.shape)
+        positives_2 = self.similarity_function(nis,njs)
+        negatives_1 = self.similarity_function(zis,nis)
+        negatives_2 = self.similarity_function(nis,zis)
+
+        positives = torch.cat([positives_1, positives_2]).view(2*self.batch_size, -1) 
+        negatives = torch.cat([negatives_1, negatives_2]).view(2*self.batch_size, -1)
         logits = positives +negatives
         #print(logits.size())
         #rint(negatives.size())

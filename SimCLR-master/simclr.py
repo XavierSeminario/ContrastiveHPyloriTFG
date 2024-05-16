@@ -83,7 +83,7 @@ class SimCLR(object):
         model = self.model
         model = self._load_pre_trained_weights(model)
 
-        optimizer = torch.optim.Adam(model.parameters(), 0.01, weight_decay=eval(self.config['weight_decay']))
+        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), 0.001, weight_decay=eval(self.config['weight_decay']))
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=0,
                                                                last_epoch=-1)
@@ -114,7 +114,7 @@ class SimCLR(object):
                 njs = njs.to(self.device)
                 labels = labels.to(self.device)
                 loss = self._step(model, xis, xjs, nis, njs, n_iter,labels)
-
+                print(loss)
                 if n_iter % self.config['log_every_n_steps'] == 0:
                     self.writer.add_scalar('train_loss', loss, global_step=n_iter)
 
@@ -163,6 +163,7 @@ class SimCLR(object):
 
             valid_loss = 0.0
             counter = 0
+            print('Eval Loss:')
             for (xis, xjs,nis,njs), labels in valid_loader:
                 xis = xis.to(self.device)
                 xjs = xjs.to(self.device)
@@ -172,6 +173,7 @@ class SimCLR(object):
                 labels = labels.to(self.device)
 
                 loss = self._step(model, xis, xjs, nis, njs, counter,labels)
+                print(loss)
                 valid_loss += loss.item()
                 counter += 1
             valid_loss /= counter

@@ -7,8 +7,8 @@ class ResNetSimCLR(nn.Module):
 
     def __init__(self, base_model, out_dim):
         super(ResNetSimCLR, self).__init__()
-        self.resnet_dict = {"resnet18": models.resnet18(pretrained=False),
-                            "resnet50": models.resnet50(pretrained=False)}
+        self.resnet_dict = {"resnet18": models.resnet18(pretrained=True),
+                            "resnet50": models.resnet50(pretrained=True)}
 
         resnet = self._get_basemodel(base_model)
         if (base_model == "resnet50"):
@@ -23,11 +23,26 @@ class ResNetSimCLR(nn.Module):
             
         num_ftrs = resnet.fc.in_features
 
-        #self.features = nn.Sequential(*list(resnet.children())[:-1])
+        for param in self.parameters():
+            param.requires_grad = False
+
+        self.features = nn.Sequential(*list(resnet.children())[:-1])
         #print(num_ftrs)
         # projection MLP
         self.l1 = nn.Linear(num_ftrs, 512)
+        self.li = nn.Linear(512,256)
         self.l2 = nn.Linear(512, out_dim)
+        self.dropout = nn.Dropout(0.2) 
+
+        for param in self.l1.parameters():
+            param.requires_grad = True
+            
+        for param in self.li.parameters():
+            param.requires_grad = True
+        
+
+        for param in self.l2.parameters():
+            param.requires_grad = True
 
     def _get_basemodel(self, model_name):
         try:
@@ -43,7 +58,11 @@ class ResNetSimCLR(nn.Module):
 
         x = self.l1(h)
         x = F.relu(x)
+        # x = self.dropout(x)
+        # x = self.li(x)
+        # x = F.relu(x)
+        # x = self.dropout(x)
         x = self.l2(x)
-        return h,x
-if __name__ == "__main__":
+        return x.squeeze(), x
+if __name__ == "__main__": 
     model = ResNetSimCLR('resnet50',64)
