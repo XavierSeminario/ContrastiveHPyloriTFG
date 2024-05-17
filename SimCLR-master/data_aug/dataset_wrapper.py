@@ -47,7 +47,7 @@ class DataSetWrapper(object):
 
     def get_train_validation_data_loaders(self, train_dataset):
         # obtain training indices that will be used for validation
-        gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        gss = GroupShuffleSplit(n_splits=1, test_size=0.18)
         X = np.array(train_dataset['index'])
         y = np.array(train_dataset['Presence'])
         groups = np.array(train_dataset['Pat_ID'])
