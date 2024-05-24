@@ -7,7 +7,9 @@ import torchvision.transforms as transforms
 from torchvision import datasets
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
+from sklearn.model_selection import StratifiedKFold
 from dataset import HPDataset
+
 
 np.random.seed(0)
 
@@ -31,7 +33,7 @@ class DataSetWrapper(object):
         train_dataset = train_dataset[train_dataset['Deleted']==0][train_dataset['Cropped']==0][train_dataset['Presence']!=0].reset_index()
 
         train_loader, valid_loader = self.get_train_validation_data_loaders(train_dataset)
-        return train_loader, valid_loader
+        return train_loader, valid_loader, train_dataset
 
     # def _get_simclr_pipeline_transform(self):
     #     # get a set of data augmentation transformations as described in the SimCLR paper.
@@ -47,27 +49,30 @@ class DataSetWrapper(object):
 
     def get_train_validation_data_loaders(self, train_dataset):
         # obtain training indices that will be used for validation
-        gss = GroupShuffleSplit(n_splits=1, test_size=0.18)
+        # gss = GroupShuffleSplit(n_splits=6, test_size=0.18)
+        skf = StratifiedKFold(n_splits=5)
         X = np.array(train_dataset['index'])
         y = np.array(train_dataset['Presence'])
         groups = np.array(train_dataset['Pat_ID'])
-        splits = gss.split(X, y, groups)
-        for train_index, test_index in splits:
-            X_train, X_test = X[train_index], X[test_index]
-            print(train_dataset)
-            train_loader = train_dataset[np.isin(X, X_train)].reset_index().drop('level_0',axis=1)
-            valid_loader = train_dataset[np.isin(X, X_test)].reset_index().drop('level_0',axis=1)
+        splits = skf.split(X, y)
 
-        train_data_path = '../HPyloriData/annotated_windows'
-        color_jitter = transforms.ColorJitter(0 * self.s, 0.2 * self.s, 0.2 * self.s, 0 * self.s)
-        train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
-                                                                                                        transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
-        valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
-                                                                                                        transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
+        return splits, X
+        # for train_index, test_index in splits:
+        #     X_train, X_test = X[train_index], X[test_index]
+        #     print(train_dataset)
+        #     train_loader = train_dataset[np.isin(X, X_train)].reset_index().drop('level_0',axis=1)
+        #     valid_loader = train_dataset[np.isin(X, X_test)].reset_index().drop('level_0',axis=1)
 
-        train_dl = DataLoader(train_set,batch_size=self.batch_size,shuffle=True,drop_last=True)
-        test_dl = DataLoader(valid_set,batch_size=self.batch_size,shuffle=True,drop_last=True)
-        return train_dl, test_dl
+        # train_data_path = '../HPyloriData/annotated_windows'
+        # color_jitter = transforms.ColorJitter(0 * self.s, 0.2 * self.s, 0.2 * self.s, 0 * self.s)
+        # train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+        #                                                                                                 transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
+        # valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+        #                                                                                                 transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
+
+        # train_dl = DataLoader(train_set,batch_size=self.batch_size,shuffle=True,drop_last=True)
+        # test_dl = DataLoader(valid_set,batch_size=self.batch_size,shuffle=True,drop_last=True)
+        # return train_dl, test_dl
 
 
 class SimCLRDataTransform(object):

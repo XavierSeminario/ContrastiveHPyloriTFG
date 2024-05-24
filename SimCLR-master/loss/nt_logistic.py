@@ -40,9 +40,9 @@ class NTLogisticLoss(torch.nn.Module):
         v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))
         return v
     def forward(self,zis,zjs,nis,njs,labels=None):
-        representations = torch.cat([zjs, zis], dim=0)
+        # representations = torch.cat([zjs, zis], dim=0)
 
-        similarity_matrix = self.similarity_function(representations, representations)
+        # similarity_matrix = self.similarity_function(representations, representations)
 
         # filter out the scores from the positive samples
         # l_pos = torch.diag(similarity_matrix, self.batch_size)
@@ -60,9 +60,11 @@ class NTLogisticLoss(torch.nn.Module):
         negatives_1 = self.similarity_function(zis,nis)
         negatives_2 = self.similarity_function(nis,zis)
 
-        positives = torch.cat([positives_1, positives_2]).view(2*self.batch_size, -1) 
-        negatives = torch.cat([negatives_1, negatives_2]).view(2*self.batch_size, -1)
-        logits = positives +negatives
+        positives = torch.cat([positives_1, positives_2]).view(2*self.batch_size, -1)/self.temperature
+        positives= torch.log(self.activation(positives))
+        negatives = torch.cat([negatives_1, negatives_2]).view(2*self.batch_size, -1)/self.temperature
+        negatives = torch.log(self.activation(negatives))
+        logits = positives + negatives
         #print(logits.size())
         #rint(negatives.size())
         #logits = torch.cat((positives, negatives), dim=1)

@@ -62,4 +62,5 @@ class HPDataset():
             label=0
             negative_img2 = torchvision.transforms.functional.rotate(copy.deepcopy(aux), angle=random.choice(angles))
 
+        # print(anchor_img.shape)
         return (anchor_img, positive_img, negative_img, negative_img2), label
