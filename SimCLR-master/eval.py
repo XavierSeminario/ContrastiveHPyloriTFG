@@ -14,20 +14,19 @@ import torchvision
 import torchvision.transforms as transforms
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit
-from dataset import HPDataset
+from sklearn.model_selection import train_test_split
+from dataset_eval import HPDataset
 from torch.utils.data import DataLoader
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve
 
 
 def eval(model,data_root,device,config):
     train_loader,test_loader = load_dataset(data_root,config)
     X_train_feature = []
     y_train = []
-    i=0
     for (batch_x, _, batch_x_neg, _), batch_y in train_loader:
-        i+=1
-        if i%2 == 0:
-            batch_x = batch_x_neg
-            batch_y = 1 - batch_y
         batch_x = batch_x.to(device)
         features, _ = model(batch_x)
         X_train_feature.extend(features.cpu().detach().numpy())
@@ -38,10 +37,6 @@ def eval(model,data_root,device,config):
     y_test = []
     i=0
     for (batch_x, _, batch_x_neg, _), batch_y in test_loader:
-        i+=1
-        if i%2 == 0:
-            batch_x = batch_x_neg
-            batch_y = 1 - batch_y
         batch_x = batch_x.to(device)
         features, _ = model(batch_x)
         X_test_feature.extend(features.cpu().detach().numpy())
@@ -60,16 +55,17 @@ def eval(model,data_root,device,config):
 def load_dataset(root ,config):
     train_dataset = pd.read_excel('../HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
     train_dataset = train_dataset[train_dataset['Deleted']==0][train_dataset['Cropped']==0][train_dataset['Presence']!=0].reset_index()
-    gss = GroupShuffleSplit(n_splits=1, test_size=0.2)
-    X = np.array(train_dataset['index'])
-    y = np.array(train_dataset['Presence'])
-    groups = np.array(train_dataset['Pat_ID'])
-    splits = gss.split(X, y, groups)
-    for train_index, test_index in splits:
-        X_train, X_test = X[train_index], X[test_index]
-        print(train_dataset)
-        train_loader = train_dataset[np.isin(X, X_train)].reset_index().drop('level_0',axis=1)
-        valid_loader = train_dataset[np.isin(X, X_test)].reset_index().drop('level_0',axis=1)
+    # gss = GroupShuffleSplit(n_splits=1, test_size=0.2)
+    train_loader,valid_loader = train_test_split(train_dataset,test_size=0.3,stratify=train_dataset['Presence'])
+    # X = np.array(train_dataset['index'])
+    # y = np.array(train_dataset['Presence'])
+    # groups = np.array(train_dataset['Pat_ID'])
+    # splits = gss.split(X, y, groups)
+    # for train_index, test_index in splits:
+    #     X_train, X_test = X[train_index], X[test_index]
+    #     print(train_dataset)
+    train_loader = train_loader.reset_index().drop('level_0',axis=1)
+    valid_loader = valid_loader.reset_index().drop('level_0',axis=1)
 
     train_data_path = '../HPyloriData/annotated_windows'
     train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
@@ -97,6 +93,28 @@ def linear_model_eval(X_train, y_train, X_test, y_test):
     print("Logistic Regression feature eval")
     print("Train score:", clf.score(X_train, y_train))
     print("Test score:", clf.score(X_test, y_test))
+
+    y_pred = clf.predict(X_test)
+    cm = confusion_matrix(y_test, y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+
+    # Plot the confusion matrix
+    disp.plot()
+
+    # Save the figure
+    plt.savefig('confusion_matrix.png')
+
+    # y_pred_proba = clf.predict_proba(X_test)[:, 1]
+    
+
+    # fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+
+    # plt.plot(fpr, tpr)
+    # plt.ylabel('True Positive Rate')
+    # plt.xlabel('False Positive Rate')
+    # plt.savefig('roc_curve.png')
+    # plt.show()
+
  
     print("-------------------------------")
     neigh = KNeighborsClassifier(n_neighbors=10)
