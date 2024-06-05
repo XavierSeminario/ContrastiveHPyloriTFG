@@ -26,21 +26,25 @@ def eval(model,data_root,device,config):
     train_loader,test_loader = load_dataset(data_root,config)
     X_train_feature = []
     y_train = []
-    for (batch_x, _, batch_x_neg, _), batch_y in train_loader:
+    groups = []
+    for (batch_x, _, batch_x_neg, _), batch_y, group in train_loader:
         batch_x = batch_x.to(device)
         features, _ = model(batch_x)
         X_train_feature.extend(features.cpu().detach().numpy())
         y_train.extend(batch_y.cpu().detach().numpy())
+        groups.extend(group)
     X_train_feature = np.array(X_train_feature)
     X_test_feature = []
     y_train = np.array(y_train)
     y_test = []
     i=0
-    for (batch_x, _, batch_x_neg, _), batch_y in test_loader:
+    groups_test = []
+    for (batch_x, _, batch_x_neg, _), batch_y, group in test_loader:
         batch_x = batch_x.to(device)
         features, _ = model(batch_x)
         X_test_feature.extend(features.cpu().detach().numpy())
         y_test.extend(batch_y.cpu().detach().numpy())
+        groups_test.extend(group)
     X_test_feature = np.array(X_test_feature)
     y_test = np.array(y_test)
     scaler = preprocessing.StandardScaler()
@@ -48,7 +52,7 @@ def eval(model,data_root,device,config):
     scaler.fit(X_train_feature)
     #print(X_test_feature.shape)
     #print(y_test.shape)
-    linear_model_eval(scaler.transform(X_train_feature), y_train, scaler.transform(X_test_feature), y_test)
+    linear_model_eval(scaler.transform(X_train_feature), y_train, scaler.transform(X_test_feature), y_test, groups, groups_test)
 
 
 
@@ -56,7 +60,12 @@ def load_dataset(root ,config):
     train_dataset = pd.read_excel('../HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
     train_dataset = train_dataset[train_dataset['Deleted']==0][train_dataset['Cropped']==0][train_dataset['Presence']!=0].reset_index()
     # gss = GroupShuffleSplit(n_splits=1, test_size=0.2)
-    train_loader,valid_loader = train_test_split(train_dataset,test_size=0.3,stratify=train_dataset['Presence'])
+    gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=37)
+    train_idx, test_idx = next(gss.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID']))
+
+    # Crear los DataFrames de entrenamiento y prueba
+    train_loader = train_dataset.iloc[train_idx]
+    valid_loader = train_dataset.iloc[test_idx]
     # X = np.array(train_dataset['index'])
     # y = np.array(train_dataset['Presence'])
     # groups = np.array(train_dataset['Pat_ID'])
@@ -73,8 +82,8 @@ def load_dataset(root ,config):
     valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
                                                                                                         transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
 
-    train_dl = DataLoader(train_set,batch_size=config['batch_size'],shuffle=True,drop_last=True)
-    test_dl = DataLoader(valid_set,batch_size=config['batch_size'],shuffle=True,drop_last=True)
+    train_dl = DataLoader(train_set,batch_size=config['batch_size'],shuffle=True)
+    test_dl = DataLoader(valid_set,batch_size=config['batch_size'],shuffle=True)
     return train_dl, test_dl
 
 def load_model(checkpoints_folder,device):
@@ -86,8 +95,9 @@ def load_model(checkpoints_folder,device):
     return model
 
     
-def linear_model_eval(X_train, y_train, X_test, y_test):
-    
+def linear_model_eval(X_train, y_train, X_test, y_test, groups, groups_test):
+    # print(type(y_test))
+    # print(groups_test)
     clf = LogisticRegression(random_state=0, max_iter=10000, solver='lbfgs', C=1.0)
     clf.fit(X_train, y_train)
     print("Logistic Regression feature eval")
@@ -95,9 +105,17 @@ def linear_model_eval(X_train, y_train, X_test, y_test):
     print("Test score:", clf.score(X_test, y_test))
 
     y_pred = clf.predict(X_test)
+    y_train_pred = clf.predict(X_train)
+    # print(type(y_pred))
     cm = confusion_matrix(y_test, y_pred)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
 
+    full_patients = np.concatenate((groups,groups_test))
+    full_diag = np.concatenate((y_train_pred , y_pred))
+    full_real = np.concatenate((y_train, y_test))
+
+    df = pd.DataFrame({'pacient': full_patients, 'diagnostic': full_diag, 'real': full_real})
+    df.to_csv('pacientes_diagnosticos_logisitc.csv', index=False)
     # Plot the confusion matrix
     disp.plot()
 
@@ -122,6 +140,16 @@ def linear_model_eval(X_train, y_train, X_test, y_test):
     print("KNN feature eval")
     print("Train score:", neigh.score(X_train, y_train))
     print("Test score:", neigh.score(X_test, y_test))
+
+    y_pred = neigh.predict(X_test)
+    y_train_pred = neigh.predict(X_train)
+
+    full_patients = np.concatenate((groups,groups_test))
+    full_diag = np.concatenate((y_train_pred , y_pred))
+    full_real = np.concatenate((y_train, y_test))
+
+    df = pd.DataFrame({'pacient': full_patients, 'diagnostic': full_diag, 'real': full_real})
+    df.to_csv('pacientes_diagnosticos_knn.csv', index=False)
 
 if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'

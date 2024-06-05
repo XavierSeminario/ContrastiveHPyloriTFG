@@ -4,7 +4,8 @@ from torch.utils.data.sampler import SubsetRandomSampler
 # from data_aug.gaussian_blur import GaussianBlur
 #from gaussian_blur import GaussianBlur
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, GroupShuffleSplit
+from sklearn.model_selection import train_test_split
 from dataset import HPDataset
 
 
@@ -47,13 +48,19 @@ class DataSetWrapper(object):
     def get_train_validation_data_loaders(self, train_dataset):
         # obtain training indices that will be used for validation
         # gss = GroupShuffleSplit(n_splits=6, test_size=0.18)
-        skf = StratifiedKFold(n_splits=5)
-        X = np.array(train_dataset['index'])
-        y = np.array(train_dataset['Presence'])
-        groups = np.array(train_dataset['Pat_ID'])
-        splits = skf.split(X, y)
+        gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=37)
+        train_idx, test_idx = next(gss.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID']))
 
-        return splits, X
+        # Crear los DataFrames de entrenamiento y prueba
+        train_loader = train_dataset.iloc[train_idx]
+        valid_loader = train_dataset.iloc[test_idx]
+
+        print(train_loader.sort_values(by=['Pat_ID']))
+        print(valid_loader.sort_values(by=['Pat_ID']))
+        # train_loader,valid_loader = train_test_split(train_dataset,test_size=0.2,stratify=train_dataset['Presence'])
+        
+
+        return train_loader, valid_loader
         # for train_index, test_index in splits:
         #     X_train, X_test = X[train_index], X[test_index]
         #     print(train_dataset)

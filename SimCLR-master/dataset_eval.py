@@ -56,4 +56,4 @@ class HPDataset():
         label = (anchor_label + 1)/2
 
         # print(anchor_img.shape)
-        return (anchor_img, positive_img, negative_img, negative_img2), label
+        return (anchor_img, positive_img, negative_img, negative_img2), label, (anchor_image_folder + '_' + anchor_image_name)
