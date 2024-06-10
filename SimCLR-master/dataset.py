@@ -50,17 +50,21 @@ class HPDataset():
                  positive_img = self.transform(positive_img)                   
                  negative_img = self.transform(negative_img)
                  negative_img2 = self.transform(negative_img2)
-        angles = [90,180,270]
+        angles = [0,90,180,270]
+        anchor_img = torchvision.transforms.functional.rotate(anchor_img, angle=random.choice(angles))
         positive_img=torchvision.transforms.functional.rotate(positive_img, angle=random.choice(angles))
+        negative_img  = torchvision.transforms.functional.rotate(negative_img, angle=random.choice(angles))
         negative_img2  = torchvision.transforms.functional.rotate(negative_img2, angle=random.choice(angles))
         label = (anchor_label + 1)/2
         if label == 1:
+            # print('change')
             aux = copy.deepcopy(positive_img)
+            aux_2 = copy.deepcopy(anchor_img)
             anchor_img=copy.deepcopy(negative_img)
-            negative_img=copy.deepcopy(anchor_img)
+            negative_img=copy.deepcopy(aux_2)
             positive_img=copy.deepcopy(negative_img2)
             label=0
-            negative_img2 = torchvision.transforms.functional.rotate(copy.deepcopy(aux), angle=random.choice(angles))
+            negative_img2 = copy.deepcopy(aux)
 
         # print(anchor_img.shape)
         return (anchor_img, positive_img, negative_img, negative_img2), label

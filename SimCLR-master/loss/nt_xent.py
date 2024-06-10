@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import torch.nn.functional as F
 
 
 class NTXentLoss(torch.nn.Module):
@@ -10,7 +11,6 @@ class NTXentLoss(torch.nn.Module):
         self.temperature = temperature
         self.device = device
         self.softmax = torch.nn.Softmax(dim=-1)
-        self.mask_samples_from_same_repr = self._get_correlated_mask().type(torch.bool)
         self.similarity_function = self._get_similarity_function(use_cosine_similarity)
         self.criterion = torch.nn.CrossEntropyLoss(reduction="sum")
 
@@ -21,13 +21,6 @@ class NTXentLoss(torch.nn.Module):
         else:
             return self._dot_simililarity
 
-    def _get_correlated_mask(self):
-        diag = np.eye(2 * self.batch_size)
-        l1 = np.eye((2 * self.batch_size), 2 * self.batch_size, k=-self.batch_size)
-        l2 = np.eye((2 * self.batch_size), 2 * self.batch_size, k=self.batch_size)
-        mask = torch.from_numpy((diag + l1 + l2))
-        mask = (1 - mask).type(torch.bool)
-        return mask.to(self.device)
 
     @staticmethod
     def _dot_simililarity(x, y):
@@ -44,8 +37,13 @@ class NTXentLoss(torch.nn.Module):
         v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))
         return v
 
-    def forward(self, zis, zjs, nis, njs, label=None, device=None):
+    def _normalize_embeddings(self, *embeddings):
+        return [F.normalize(embed, p=2, dim=1) for embed in embeddings]
 
+    def forward(self, zis, zjs, nis, njs, label=None, device=None):
+        zis, zjs, nis, njs = self._normalize_embeddings(zis, zjs, nis, njs)
+
+        
         positives_1 = torch.diag(self.similarity_function(zis,zjs))
         positives_2 = torch.diag(self.similarity_function(nis,njs))
         negatives_1 = self.similarity_function(zis,nis)
@@ -53,7 +51,7 @@ class NTXentLoss(torch.nn.Module):
 
         positives = torch.cat([positives_1, positives_2]).view(2*self.batch_size, 1) 
         negatives = torch.cat([negatives_1, negatives_2]).view(2*self.batch_size, -1)
-
+        # negatives, _ = torch.max(negatives, dim=1, keepdim=True)
         logits = torch.cat((positives, negatives), dim=1)
         logits /= self.temperature
 
@@ -61,7 +59,7 @@ class NTXentLoss(torch.nn.Module):
 
         loss = self.criterion(logits, labels)
 
-        return loss / (self.batch_size)
+        return loss / (2 * self.batch_size)
 if __name__ == "__main__":
     Loss = NTXentLoss('cpu',4,0.5,True)
     print(Loss.mask_samples_from_same_repr)

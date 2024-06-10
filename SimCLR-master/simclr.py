@@ -1,5 +1,5 @@
 import torch
-from models.resnet_simclr import ResNetSimCLR
+from models.resnet_simclr_old import ResNetSimCLR
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 from loss.nt_xent import NTXentLoss
@@ -9,8 +9,10 @@ import os
 import shutil
 import sys
 from dataset import HPDataset
+from dataset_embeddings import EmbeddingsDataset
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
+from sklearn.model_selection import StratifiedGroupKFold, GroupShuffleSplit
 
 
 apex_support = False
@@ -61,7 +63,7 @@ class SimCLR(object):
 
         # get the representations and the projections
         ris, zis = model(xis)  # [N,C]
-
+        # print(ris.shape)
         # get the representations and the projections
         rjs, zjs = model(xjs)  # [N,C]
 
@@ -88,7 +90,9 @@ class SimCLR(object):
         model = self.model
         model = self._load_pre_trained_weights(model)
 
-        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), 0.001, weight_decay=eval(self.config['weight_decay']))
+        # trainable_parameters = model.get_trainable_parameters()
+        # filter(lambda p: p.requires_grad, model.parameters())
+        optimizer = torch.optim.Adam( model.parameters(), 0.001, weight_decay=eval(self.config['weight_decay']))
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=1500, eta_min=0,
                                                                last_epoch=-1)
@@ -117,11 +121,26 @@ class SimCLR(object):
                                                                                                         transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
         valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
                                                                                                         transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
+        
+        data = np.load('C:/Users/xavis/OneDrive/Escritorio/Uni/TFG/ContrastiveHPyloriTFG/helico/PreTrainedFeatures_Immuno.npz')
+
+        dades = data['feVGG']
+        y_true = data['y_true']
+        groups = data['PatID_patches']
+
+        gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=202)
+        train_idx, test_idx = next(gss.split(X=dades, y=y_true, groups=groups))
+
+        # Crear los DataFrames de entrenamiento y prueba
+
+        train_set=EmbeddingsDataset(dades[train_idx],y_true[train_idx])
+        valid_set=EmbeddingsDataset(dades[test_idx],y_true[test_idx])
 
         train_loader = DataLoader(train_set,batch_size=self.batch_size,shuffle=True,drop_last=True)
-        valid_loader = DataLoader(valid_set,batch_size=self.batch_size,shuffle=True,drop_last=True)
+        valid_loader = DataLoader(valid_set,batch_size=self.batch_size,shuffle=False,drop_last=True)
 
         for epoch_counter in range(self.config['epochs']):
+            print(epoch_counter)
             # splits, X, train_dataset = self.dataset.get_data_loaders()
             # print(epoch_counter)
             # # print(splits)

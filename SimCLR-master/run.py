@@ -1,7 +1,7 @@
 from simclr import SimCLR
 import yaml
 from data_aug.dataset_wrapper import DataSetWrapper
-from eval import eval
+from eval2 import eval
 import torch
 def main():
     config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)

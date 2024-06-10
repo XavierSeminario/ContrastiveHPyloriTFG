@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+import torch.nn.functional as F
+
 
 class MarginalTripletLossC(torch.nn.Module):
     def __init__(self,device,batch_size,m,use_cosine_similarity):
@@ -7,16 +9,8 @@ class MarginalTripletLossC(torch.nn.Module):
         self.batch_size = batch_size
         self.m = m
         self.device = device
-        self.mask_samples_from_same_repr = self._get_correlated_mask().type(torch.bool)
         self.similarity_function = self._get_similarity_function(use_cosine_similarity)
         self.activation = torch.nn.ReLU()
-    def _get_correlated_mask(self):
-        diag = np.eye(2 * self.batch_size)
-        l1 = np.eye((2 * self.batch_size), 2 * self.batch_size, k=-self.batch_size)
-        l2 = np.eye((2 * self.batch_size), 2 * self.batch_size, k=self.batch_size)
-        mask = torch.from_numpy((diag + l1 + l2))
-        mask = (1 - mask).type(torch.bool)
-        return mask.to(self.device)
     
     def _get_similarity_function(self, use_cosine_similarity):
         if use_cosine_similarity:
@@ -39,20 +33,31 @@ class MarginalTripletLossC(torch.nn.Module):
         # v shape: (N, 2N)
         v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))
         return v
+    
+    def _normalize_embeddings(self, *embeddings):
+        return [F.normalize(embed, p=2, dim=1) for embed in embeddings]
+    
     def forward(self,zis,zjs,nis,njs,labels=None):
-        positives_1 = self.similarity_function(zis,zjs)
-        positives_2 = self.similarity_function(nis,njs)
+        # zis, zjs, nis, njs = self._normalize_embeddings(zis, zjs, nis, njs)
+
+        positives_1 = torch.diag(self.similarity_function(zis,zjs))
+        positives_2 = torch.diag(self.similarity_function(nis,njs))
         negatives_1 = self.similarity_function(zis,nis)
         negatives_2 = self.similarity_function(nis,zis)
 
         positives = torch.cat([positives_1, positives_2]).view(2*self.batch_size, -1) 
         negatives = torch.cat([negatives_1, negatives_2]).view(2*self.batch_size, -1)
 
+        # negatives, _ = torch.max(negatives, dim=1, keepdim=True)
+        # print(hard_negatives.shape)
+
         logits =negatives - positives + self.m
 
         loss = torch.sum(self.activation(logits))
 
-        return loss / (self.batch_size*(self.batch_size-1))
+        return loss / (self.batch_size * (2 * self.batch_size - 1))
+    
+    
 if __name__ == "__main__":
     Loss = MarginalTripletLossC('cpu',4,1,True)
     print(Loss.mask_samples_from_same_repr)

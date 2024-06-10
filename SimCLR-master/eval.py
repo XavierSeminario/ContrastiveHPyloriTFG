@@ -60,7 +60,7 @@ def load_dataset(root ,config):
     train_dataset = pd.read_excel('../HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
     train_dataset = train_dataset[train_dataset['Deleted']==0][train_dataset['Cropped']==0][train_dataset['Presence']!=0].reset_index()
     # gss = GroupShuffleSplit(n_splits=1, test_size=0.2)
-    gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=37)
+    gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=30)
     train_idx, test_idx = next(gss.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID']))
 
     # Crear los DataFrames de entrenamiento y prueba
@@ -82,8 +82,8 @@ def load_dataset(root ,config):
     valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
                                                                                                         transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
 
-    train_dl = DataLoader(train_set,batch_size=config['batch_size'],shuffle=True)
-    test_dl = DataLoader(valid_set,batch_size=config['batch_size'],shuffle=True)
+    train_dl = DataLoader(train_set,batch_size=config['batch_size'],shuffle=True,drop_last=True)
+    test_dl = DataLoader(valid_set,batch_size=config['batch_size'],shuffle=True,drop_last=True)
     return train_dl, test_dl
 
 def load_model(checkpoints_folder,device):
