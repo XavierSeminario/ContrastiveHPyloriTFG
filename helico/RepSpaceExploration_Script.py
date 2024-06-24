@@ -43,32 +43,30 @@ y_true=data['y_true']
          
 from sklearn.manifold import TSNE,trustworthiness
 network='EfficientNet'
-# network='DensNet'
-# network='ResNet'
-# network='VGG'
+network='DensNet'
+network='ResNet'
+network='VGG'
 
-embeddings=feEff
-tsne = TSNE(n_components=2, random_state=42)
-embeddings_2d = tsne.fit_transform(embeddings)
-Trst=trustworthiness(embeddings, embeddings_2d)
+# embeddings=feEff
+# tsne = TSNE(n_components=2, random_state=42)
+# embeddings_2d = tsne.fit_transform(embeddings)
+# Trst=trustworthiness(embeddings, embeddings_2d)
 
-embeddings=feEffAug
+embeddings=feVGGAug
 tsne = TSNE(n_components=2, random_state=42)
 embeddings_2dAug = tsne.fit_transform(embeddings)
 TrstAug=trustworthiness(embeddings, embeddings_2dAug)
 
+# plt.figure()
+# plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], 
+#             cmap='viridis', marker='o')
+# plt.scatter(embeddings_2d[y_true==1, 0], embeddings_2d[y_true==1, 1], 
+#             cmap='viridis', marker='o',color='r')
+# plt.title('Visualització t-SNE dels Embedings '+network)
+# plt.savefig(os.path.join(ResDir,network))
 plt.figure()
-plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], 
+plt.scatter(embeddings_2dAug[:, 0], embeddings_2dAug[:, 1], c=y_trueAug,
             cmap='viridis', marker='o')
-plt.scatter(embeddings_2d[y_true==1, 0], embeddings_2d[y_true==1, 1], 
-            cmap='viridis', marker='o',color='r')
-plt.title('Visualització t-SNE dels Embedings '+network)
-plt.savefig(os.path.join(ResDir,network))
-plt.figure()
-plt.scatter(embeddings_2dAug[:, 0], embeddings_2dAug[:, 1], 
-            cmap='viridis', marker='o')
-plt.scatter(embeddings_2dAug[y_trueAug==1, 0], embeddings_2dAug[y_trueAug==1, 1], 
-            cmap='viridis', marker='o',color='r')
 plt.title('Visualització t-SNE dels Embedings '+network+'Aug')
 plt.savefig(os.path.join(ResDir,network+'Aug'))
 

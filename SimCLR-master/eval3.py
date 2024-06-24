@@ -12,6 +12,10 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import StratifiedGroupKFold, GroupShuffleSplit
 from dataset_no_cl import HPDataset
 import torchvision.transforms as transforms
+from PIL import Image
+from sklearn.manifold import TSNE
+
+
 
 
 # Define the small neural network
@@ -45,19 +49,24 @@ class ResNet_Triplet(nn.Module):
             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Flatten()
+           
 
-            nn.Flatten(),
+        )
+
+        self.flatten = nn.Sequential(
+
             nn.Linear(4096, 512),
             nn.ReLU(),
             nn.Linear(512, 64),
             nn.ReLU(),
             nn.Linear(64, 1),
             nn.Sigmoid()
-
         )
 
     def forward(self,x):
         features = self.Feature_Extractor(x)
+        features = self.flatten(features)
         #triplets = self.Triplet_Loss(features)
         return features
 
@@ -72,7 +81,7 @@ class ResNet_Triplet(nn.Module):
 #     test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False)
 #     return train_loader, test_loader
 
-def train_nn(model, train_loader, device, num_epochs=30):
+def train_nn(model, train_loader, device, num_epochs=15):
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     model.train()
@@ -105,10 +114,10 @@ def evaluate_nn(model, test_loader, device):
 def eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name):
 
     if net_name!='own':
-        scaler = StandardScaler()
-        scaler.fit(X_train)
-        X_train = scaler.transform(X_train)
-        X_test = scaler.transform(X_test)
+        # scaler = StandardScaler()
+        # scaler.fit(X_train)
+        # X_train = scaler.transform(X_train)
+        # X_test = scaler.transform(X_test)
 
         # Convert data to PyTorch tensors
         X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
@@ -127,44 +136,142 @@ def eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name):
     
     if net_name=='own': 
         train_dataset = pd.read_excel('../HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
-        train_dataset = train_dataset[train_dataset['Deleted']==0][train_dataset['Cropped']==0][train_dataset['Presence']!=0].reset_index()
+        train_dataset_aug = pd.read_excel('../HPyloriData/HP_WSI-CoordAugAnnotatedWindows.xlsx')
 
-        gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=202)
+        train_dataset = train_dataset[train_dataset['Deleted']==0][train_dataset['Cropped']==0][train_dataset['Presence']!=0]
+        aug=True
+        if aug:
+            train_dataset = train_dataset.drop(columns=['Deleted', 'Cropped'])
+            train_dataset_aug = train_dataset_aug.drop(columns=['Unnamed: 0.1','Unnamed: 0'])
 
-        train_idx, test_idx = next(gss.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID']))
-        train_loader = train_dataset.iloc[train_idx]
-        valid_loader = train_dataset.iloc[test_idx]
-        train_loader = train_loader.reset_index().drop('level_0',axis=1)
-        valid_loader = valid_loader.reset_index().drop('level_0',axis=1)
+            train_dataset = pd.concat([train_dataset, train_dataset_aug], ignore_index=True)
+
+            def add_leading_zeros(value):
+
+                try:
+                    num_part, text_part = value.split('_')
+                    num_part = num_part.zfill(5)  # Pad the numeric part with leading zeros up to 5 digits
+                    return f"{num_part}_{text_part}"
+                except:
+                    return str(value).zfill(5) 
+            train_dataset['Window_ID'] = train_dataset['Window_ID'].apply(add_leading_zeros)
+            
+        train_dataset = train_dataset.reset_index()
+        # gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=202)
+        strkf = StratifiedGroupKFold(n_splits=15)
+        splits = strkf.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID'])
 
         train_data_path = '../HPyloriData/annotated_windows'
-        train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
-                                                                                                        transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
-        valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
-                                                                                                        transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
-        
-        train_loader = DataLoader(train_set, batch_size=config['batch_size'], shuffle=True)
-        test_loader = DataLoader(valid_set, batch_size=config['batch_size'], shuffle=False)
-        small_nn = ResNet_Triplet().to(device)
-        
-    train_nn(small_nn, train_loader, device)
 
-    # Evaluate the small neural network
-    y_pred, y_test = evaluate_nn(small_nn, test_loader, device)
+        i = 0
+        for train_idx, test_idx in splits:
+            train_loader = train_dataset.iloc[train_idx]
+            valid_loader = train_dataset.iloc[test_idx]
+
+            train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+                                                                                                            transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
+            valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+                                                                                                            transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
+            
+            train_loader = DataLoader(train_set, batch_size=config['batch_size'], shuffle=True)
+            test_loader = DataLoader(valid_set, batch_size=config['batch_size'], shuffle=False)
+            small_nn = ResNet_Triplet().to(device)
+            
+            train_nn(small_nn, train_loader, device)
+
+            # Evaluate the small neural network
+            # y_pred, y_test = evaluate_nn(small_nn, test_loader, device)
+
+            # # Calculate and display confusion matrix
+            # cm = confusion_matrix(y_test, y_pred)
+            # disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+            # disp.plot()
+            # plt.savefig('confusion_matrix_nn_' + net_name +'.png')
+
+            y_pred, y_test = evaluate_nn(small_nn, train_loader, device)
+
+            X_train_feature = []
+            y_train = []
+            groups = []
+
+            for batch_x , batch_y in train_loader:
+                batch_x = batch_x.to(device)
+                # print(batch_x.shape)
+                features= small_nn.Feature_Extractor(batch_x)
+                # print(features.shape)
+                X_train_feature.extend(features.cpu().detach().numpy())
+                y_train.extend(batch_y.cpu().detach().numpy())
+                # groups.extend(group)
+            
+            X_test_feature = []
+            y_test = []
+            groups_test = []
+
+            for batch_x, batch_y in test_loader:
+                batch_x = batch_x.to(device)
+                features = small_nn.Feature_Extractor(batch_x)
+                X_test_feature.extend(features.cpu().detach().numpy())
+                y_test.extend(batch_y.cpu().detach().numpy())
+                # groups_test.extend(group)
+
+            X_train_feature = np.array(X_train_feature)
+            X_test_feature = np.array(X_test_feature)
+            y_train = np.array(y_train)
+            y_test = np.array(y_test)
+
+            # full_patients = np.concatenate((groups,groups_test))
+            full_diag = np.concatenate((X_train_feature ,X_test_feature))
+            full_real = np.concatenate((y_train, y_test))
+
+            tsne = TSNE(n_components=2, random_state=42, perplexity=20)
+            embeddings_2d = tsne.fit_transform(full_diag)
+
+            plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], c=full_real, cmap='viridis', marker='o')
+            plt.title('Visualització t-SNE dels Embedings OwnModel')
+            plt.colorbar()
+            plt.show()
+
+            # train_dataset = pd.read_excel('../HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
+
+            # Patients = train_dataset['Pat_ID'].unique()
+            transform = transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+                                        transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])])
+            path = 'D:/AA_TFG/TFG-Dades/WSI'
+            for patient in os.listdir(path):
+                
+                print(patient)
+                list_of_imgs = []
+                for filename in os.listdir(path +'/'+ patient):
+                    if filename.endswith('.png'):
+                        img = Image.open(path +'/'+ patient + '/' + filename).convert('RGB')
+                        list_of_imgs.append( transform(img))
+
+
+                imgs_tensor = torch.stack(list_of_imgs).to(device)
+                print(imgs_tensor.shape)
+
+            # Pass images through the model and small_nn to get probabilities
+                with torch.no_grad():
+                    small_nn.eval()
+                    # outputs = outputs
+                    probabilities = small_nn(imgs_tensor).cpu().numpy()
+
+                # Save probabilities in a .npz file
+                npz_filename = f'Inferences\Inference_BCE_{str(i+1)}\{patient}_probabilities.npz'
+                np.savez(npz_filename, probabilities=probabilities)
+                print(f'Saved probabilities for patient {patient} in {npz_filename}')
+            i+=1
+
+                # train_idx, test_idx = next(gss.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID']))
+
+                # Crear los DataFrames de entrenamiento y prueba
+    return small_nn 
 
     # Calculate and display confusion matrix
-    cm = confusion_matrix(y_test, y_pred)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-    disp.plot()
-    plt.savefig('confusion_matrix_nn_' + net_name + '.png')
-
-    y_pred, y_test = evaluate_nn(small_nn, train_loader, device)
-
-    # Calculate and display confusion matrix
-    cm = confusion_matrix(y_test, y_pred)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-    disp.plot()
-    plt.savefig('train_confusion_matrix_nn_' + net_name + '.png')
+    # cm = confusion_matrix(y_test, y_pred)
+    # disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    # disp.plot()
+    # plt.savefig('train_confusion_matrix_nn_' + net_name + '.png')
 
 if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -188,46 +295,73 @@ if __name__ == "__main__":
     y_trueAug=data['y_true']
 
 
-    data=np.load(os.path.join(DataDir,'PreTrainedFeatures'+'_Immuno'+'.npz'),
-                allow_pickle=True)
     y_true=data['y_true']
     pats = data['PatID_patches']
-    feRes=data['feRes']
+
     
-    cv = StratifiedGroupKFold(n_splits=6)
+    cv = StratifiedGroupKFold(n_splits=15)
 
-    train_idx, test_idx = next(cv.split(feRes,y_true,pats))
+    i=0
+    for train_idx, test_idx in cv.split(feResAug,y_true,pats):
 
-    gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=202)
-    train_idx, test_idx = next(gss.split(X=feRes, y=y_true, groups=pats))
+        X_train = feResAug[train_idx]
+        X_test = feResAug[test_idx]
+        y_train = y_trueAug[train_idx]
+        y_test = y_trueAug[test_idx]
 
-    X_train = feRes[train_idx]
-    X_test = feRes[test_idx]
-    y_train = y_true[train_idx]
-    y_test = y_true[test_idx]
+    #     # gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=37)
+    #     # train_idx, test_idx = next(gss.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID']))
 
-    # gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=37)
-    # train_idx, test_idx = next(gss.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID']))
+        # eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='ResNet'+str(i))
 
-    eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='ResNet')
+        # # feDens=data['feDens']
+        # X_train = feDensAug[train_idx]
+        # X_test = feDensAug[test_idx]
+        # eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='DensNet'+str(i))
 
-    feDens=data['feDens']
-    X_train = feDens[train_idx]
-    X_test = feDens[test_idx]
-    eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='DensNet')
-
-    feVGG=data['feVGG']
-    X_train = feVGG[train_idx]
-    X_test = feVGG[test_idx]
-    eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='VGG')
+        # # feVGG=data['feVGG']
+        # X_train = feVGGAug[train_idx]
+        # X_test = feVGGAug[test_idx]
+        # eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='VGG'+str(i))
 
 
-    feEff=data['feEff']
-    X_train = feEff[train_idx]
-    X_test = feEff[test_idx]
-    eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='feEff')
+        # # feEff=data['feEff']
+        # X_train = feEffAug[train_idx]
+        # X_test = feEffAug[test_idx]
+        # eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='feEff'+str(i))
+        # i+=1
 
-    eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='own')
+    small_nn = eval_with_data(X_train, y_train, X_test, y_test, device, config, net_name='own')
+
+        # train_dataset = pd.read_excel('../HPyloriData/HP_WSI-CoordAnnotatedWindows.xlsx')
+
+        # Patients = train_dataset['Pat_ID'].unique()
+        # transform = transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
+        #                             transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])])
+        # path = 'D:/AA_TFG/TFG-Dades/WSI'
+        # for patient in os.listdir(path):
+            
+        #     print(patient)
+        #     list_of_imgs = []
+        #     for filename in os.listdir(path +'/'+ patient):
+        #         if filename.endswith('.png'):
+        #             img = Image.open(path +'/'+ patient + '/' + filename).convert('RGB')
+        #             list_of_imgs.append( transform(img))
+
+
+        #     imgs_tensor = torch.stack(list_of_imgs).to(device)
+        #     print(imgs_tensor.shape)
+
+        # # Pass images through the model and small_nn to get probabilities
+        #     with torch.no_grad():
+        #         small_nn.eval()
+        #         # outputs = outputs
+        #         probabilities = small_nn(imgs_tensor).cpu().numpy()
+
+        #     # Save probabilities in a .npz file
+        #     npz_filename = f'{patient}_probabilities.npz'
+        #     np.savez(npz_filename, probabilities=probabilities)
+        #     print(f'Saved probabilities for patient {patient} in {npz_filename}')
 
 
     # Example usage of eval_with_data

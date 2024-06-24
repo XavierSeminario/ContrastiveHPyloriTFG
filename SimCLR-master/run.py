@@ -13,7 +13,7 @@ def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(device)
     model = simclr.model
-    eval(model,'./data/',device,config)
+    eval(model,'./data/',device,config, cont=15)
 
 
 if __name__ == "__main__":

@@ -7,8 +7,8 @@ class ResNetSimCLR(nn.Module):
 
     def __init__(self, base_model, out_dim):
         super(ResNetSimCLR, self).__init__()
-        self.l0 = nn.Linear(4096,4096)
-        self.l1 = nn.Linear(4096, 512)
+        self.l0 = nn.Linear(2048,2048)
+        self.l1 = nn.Linear(2048, 512)
         self.l2 = nn.Linear(512, out_dim)
 
     def forward(self, x):

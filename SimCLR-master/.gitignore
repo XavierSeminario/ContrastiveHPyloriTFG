@@ -3,4 +3,6 @@
 *.pyc
 *.yaml
 *.png
-
+/Inferences/
+/helico/
+/Results/

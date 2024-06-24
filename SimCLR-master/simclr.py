@@ -12,7 +12,7 @@ from dataset import HPDataset
 from dataset_embeddings import EmbeddingsDataset
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from sklearn.model_selection import StratifiedGroupKFold, GroupShuffleSplit
+from sklearn.model_selection import StratifiedGroupKFold, GroupShuffleSplit, train_test_split
 
 
 apex_support = False
@@ -112,29 +112,43 @@ class SimCLR(object):
         best_valid_loss = np.inf
         train_data_path = '../HPyloriData/annotated_windows'
 
-        splits_, X_, train_dataset = self.dataset.get_data_loaders()
+        tr, val, train_dataset = self.dataset.get_data_loaders()
         # print(epoch_counter)
         # print(splits)
-        train_loader = splits_.reset_index().drop('level_0',axis=1)
-        valid_loader = X_.reset_index().drop('level_0',axis=1)
+        train_loader = tr.reset_index().drop('level_0',axis=1)
+        # valid_loader = val.reset_index().drop('level_0',axis=1)
+        train_loader, val_loader, _, _ = train_test_split(train_loader, train_loader['Presence'], test_size=0.1)
+
+        train_loader = train_loader.reset_index().drop('level_0',axis=1)
+        valid_loader = val_loader.reset_index().drop('level_0',axis=1)
         train_set = HPDataset(train_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
                                                                                                         transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
         valid_set = HPDataset(valid_loader,path=train_data_path,train=True,transform=transforms.Compose([transforms.ToTensor(),transforms.Resize((32,32)),
                                                                                                         transforms.Normalize([0.8061, 0.8200, 0.8886], [0.0750, 0.0563, 0.0371])]))
         
-        data = np.load('C:/Users/xavis/OneDrive/Escritorio/Uni/TFG/ContrastiveHPyloriTFG/helico/PreTrainedFeatures_Immuno.npz')
+        data = np.load('C:/Users/xavis/OneDrive/Escritorio/Uni/TFG/ContrastiveHPyloriTFG/helico/PreTrainedFeatures_Immuno_Aug.npz')
 
-        dades = data['feVGG']
+        dades = data['feRes']
         y_true = data['y_true']
         groups = data['PatID_patches']
 
-        gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=202)
-        train_idx, test_idx = next(gss.split(X=dades, y=y_true, groups=groups))
+        cv = StratifiedGroupKFold(n_splits=15)
+        cont=1
+        for train_idx, test_idx in cv.split(dades, y_true, groups):
+            train_set=dades[train_idx]
+            valid_set=dades[test_idx]
+            y_data = y_true[train_idx]
+            if cont==15:
+                break
+            cont+=1
+           
+        train_loader, valid_loader,y_train,y_valid = train_test_split(train_set, y_data, test_size=0.1)
 
+        train_set = EmbeddingsDataset(train_loader,y_train)
+        valid_set=EmbeddingsDataset(valid_loader,y_valid)
         # Crear los DataFrames de entrenamiento y prueba
 
-        train_set=EmbeddingsDataset(dades[train_idx],y_true[train_idx])
-        valid_set=EmbeddingsDataset(dades[test_idx],y_true[test_idx])
+        
 
         train_loader = DataLoader(train_set,batch_size=self.batch_size,shuffle=True,drop_last=True)
         valid_loader = DataLoader(valid_set,batch_size=self.batch_size,shuffle=False,drop_last=True)

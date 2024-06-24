@@ -69,8 +69,15 @@ class DataSetWrapper(object):
     def get_train_validation_data_loaders(self, train_dataset):
         # obtain training indices that will be used for validation
         # gss = GroupShuffleSplit(n_splits=6, test_size=0.18)
-        gss = GroupShuffleSplit(n_splits=1, test_size=0.2,random_state=202)
-        train_idx, test_idx = next(gss.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID']))
+        strkf = StratifiedGroupKFold(n_splits=15)
+        splits = strkf.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID'])
+        cont=14
+        i = 0
+        for train_idx, test_idx in splits:
+            if i == cont:
+                break
+            i += 1
+        # train_idx, test_idx = next(gss.split(X=train_dataset, y=train_dataset['Presence'], groups=train_dataset['Pat_ID']))
 
         # Crear los DataFrames de entrenamiento y prueba
         train_loader = train_dataset.iloc[train_idx]
